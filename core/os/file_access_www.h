@@ -51,7 +51,8 @@ class FileAccessWwwClient { // 内部缓存类
 	mutable String request_string; //url 请求地址
 	mutable bool p_ssl = false; // is or not https
 	mutable String path_src;
-
+	mutable int err_num;
+	
 	RingBuffer<uint8_t> fileAccessInfo;
 
 	unsigned long posStart;
@@ -68,7 +69,7 @@ class FileAccessWwwClient { // 内部缓存类
 	int lockcount;
 	void lock_mutex();
 	void unlock_mutex();
-	Error http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders) const;
+	Error http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders);
 	void get_buffer_data();
 	friend class FileAccessWww;
 	static FileAccessWwwClient *singleton;

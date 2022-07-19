@@ -119,7 +119,9 @@ void FileAccessWwwClient::_thread_func(void *s) {
 	self->_thread_func();
 }
 
-Error FileAccessWwwClient::http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders) const {
+Error FileAccessWwwClient::http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders) {
+
+Retry:
 	ERR_FAIL_COND_V_MSG(url.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	ERR_FAIL_COND_V_MSG(port == NULL, ERR_CANT_CREATE, "http_request port is empty");
 	ERR_FAIL_COND_V_MSG(path_src.empty(), ERR_CANT_CREATE, "http_request path_src is empty");
@@ -144,6 +146,16 @@ Error FileAccessWwwClient::http_request( Vector<String> &header,PoolVector<uint8
 		hc->poll();
 	}
 
+	int r_code = hc->get_response_code(); 
+	if( !(r_code > 199 && r_code <= 299) ){
+		printf("http code %d \n",r_code);
+		unlock_mutex();
+		OS::get_singleton()->delay_usec(5000000);
+		hc->close();
+		lock_mutex();
+		goto Retry;
+	}
+
 	ERR_FAIL_COND_V_MSG(!hc->has_response(), Error(FAILED), "Error has_response: false " + path_src + ".");
 
 	while(hc->get_status() == HTTPClient::Status::STATUS_BODY){
@@ -155,6 +167,9 @@ Error FileAccessWwwClient::http_request( Vector<String> &header,PoolVector<uint8
 	Error eeee = hc->get_response_headers(&rheaders);
 
 	ERR_FAIL_COND_V_MSG(eeee != OK, eeee, "Error get_response_headers: " + path_src + ".");
+
+
+	
 
 	hc->close();
 	
@@ -203,8 +218,6 @@ FileAccessWwwClient::~FileAccessWwwClient() {
 		thread.wait_to_finish();
 	}
 }
-
-
 
 
 void FileAccessWww::check_errors() const {
