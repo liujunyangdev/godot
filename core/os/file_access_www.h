@@ -45,7 +45,7 @@ class FileAccessWww;
 class FileAccessWwwClient { // 内部缓存类
 
 	Semaphore sem;
-	mutable HTTPClient *hc; // Http
+	mutable HTTPClient *hc = memnew(HTTPClient); // Http
 	mutable String url; // 域名 或ip地址
 	mutable int port; // 端口消息
 	mutable String request_string; //url 请求地址
@@ -68,7 +68,8 @@ class FileAccessWwwClient { // 内部缓存类
 	int lockcount;
 	void lock_mutex();
 	void unlock_mutex();
-	Error http_request();
+	Error http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders) const;
+	void get_buffer_data();
 	friend class FileAccessWww;
 	static FileAccessWwwClient *singleton;
 
@@ -80,7 +81,6 @@ public:
 	static FileAccessWwwClient *get_singleton() { return singleton; }
 
 	int poll_back(uint8_t *p_buf, int pos,int p_size);
-	void seek(unsigned long p_position); ///< seek to a given position
 	Error connect(const String &p_path);
 
 	FileAccessWwwClient();
