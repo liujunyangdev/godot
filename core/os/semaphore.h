@@ -60,6 +60,12 @@ public:
 		--count_;
 	}
 
+	_ALWAYS_INLINE_ void clear() const {
+		std::unique_lock<decltype(mutex_)> lock(mutex_);
+
+		count_ = 0;
+	}
+	
 	_ALWAYS_INLINE_ bool try_wait() const {
 		std::lock_guard<decltype(mutex_)> lock(mutex_);
 		if (count_) {
