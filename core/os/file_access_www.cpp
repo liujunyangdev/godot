@@ -148,14 +148,15 @@ Retry:
 
 	int r_code = hc->get_response_code(); 
 	if( !(r_code > 199 && r_code <= 299) ){
-		printf("http code %d \n",r_code);
+		printf("http error code %d \n",r_code);
 		unlock_mutex();
-		OS::get_singleton()->delay_usec(5000000);
+		OS::get_singleton()->delay_usec(5000000); //5s
 		hc->close();
 		lock_mutex();
 		goto Retry;
 	}
-
+	
+	//这个 response 和 headers 不能调换顺序 否则response 会出现没有数据的情况
 	ERR_FAIL_COND_V_MSG(!hc->has_response(), Error(FAILED), "Error has_response: false " + path_src + ".");
 
 	while(hc->get_status() == HTTPClient::Status::STATUS_BODY){
@@ -165,11 +166,7 @@ Retry:
 	}
 
 	Error eeee = hc->get_response_headers(&rheaders);
-
 	ERR_FAIL_COND_V_MSG(eeee != OK, eeee, "Error get_response_headers: " + path_src + ".");
-
-
-	
 
 	hc->close();
 	
