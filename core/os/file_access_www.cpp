@@ -30,14 +30,14 @@
 
 #include "file_access_www.h"
 
-#include "core/os/os.h"
 #include "core/io/http_client.h"
+#include "core/os/os.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <errno.h>
 #include "core/os/os.h"
+#include <errno.h>
 
 void FileAccessWwwClient::lock_mutex() {
 
@@ -51,13 +51,10 @@ void FileAccessWwwClient::unlock_mutex() {
 	mutex.unlock();
 }
 
+int FileAccessWwwClient::poll_back(uint8_t *p_buf, int pos, int p_size) {
 
-
-int FileAccessWwwClient::poll_back(uint8_t *p_buf, int pos,int p_size) {
-
-	return fileAccessInfo.read(p_buf,p_size,true);
+	return fileAccessInfo.read(p_buf, p_size, true);
 }
-
 
 Error FileAccessWwwClient::connect(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(p_path.empty(), ERR_CANT_CREATE, "http_request url is empty");
@@ -67,7 +64,7 @@ Error FileAccessWwwClient::connect(const String &p_path) {
 	Error err = p_path.parse_url(scheme, url, port, request_string);
 	ERR_FAIL_COND_V_MSG(err != OK, err, "Error parsing URL: " + p_path + ".");
 
-	if(p_path.begins_with("https")){
+	if (p_path.begins_with("https")) {
 		port = 443;
 		p_ssl = true;
 	}
@@ -75,27 +72,27 @@ Error FileAccessWwwClient::connect(const String &p_path) {
 	List<String> rheaders;
 
 	PoolVector<uint8_t> rb;
-	
+
 	Vector<String> header;
 
 	String hRang = "Range: bytes=0-1";
 
-	header.push_back(hRang); 
+	header.push_back(hRang);
 
-	http_request(header,rb,rheaders);
+	http_request(header, rb, rheaders);
 
 	for (const List<String>::Element *E = rheaders.front(); E; E = E->next()) {
 		String s = E->get();
-		if(s.begins_with("Content-Range")){
+		if (s.begins_with("Content-Range")) {
 			int idnexnum = s.find("/");
-			String sizenum = s.substr( idnexnum + 1 , -1);
+			String sizenum = s.substr(idnexnum + 1, -1);
 			total_size = sizenum.to_int64();
 			break;
 		}
 	}
 
 	fileAccessInfo.resize(24);
-	
+
 	thread.start(_thread_func, this);
 
 	return OK;
@@ -103,7 +100,7 @@ Error FileAccessWwwClient::connect(const String &p_path) {
 
 void FileAccessWwwClient::_thread_func() {
 	while (!quit) {
-		if(fileAccessInfo.space_left() > p_lenght && isfileAccessInfo){
+		if (fileAccessInfo.space_left() > p_lenght && isfileAccessInfo) {
 			lock_mutex();
 			get_buffer_data();
 			unlock_mutex();
@@ -119,47 +116,40 @@ void FileAccessWwwClient::_thread_func(void *s) {
 	self->_thread_func();
 }
 
-Error FileAccessWwwClient::http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders) {
+Error FileAccessWwwClient::http_request(Vector<String> &header, PoolVector<uint8_t> &rb, List<String> &rheaders) {
 
-Retry:
 	ERR_FAIL_COND_V_MSG(url.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	ERR_FAIL_COND_V_MSG(port == NULL, ERR_CANT_CREATE, "http_request port is empty");
 	ERR_FAIL_COND_V_MSG(path_src.empty(), ERR_CANT_CREATE, "http_request path_src is empty");
 
-
-	if(hc->get_status() != HTTPClient::Status::STATUS_CONNECTED){
+	if (hc->get_status() != HTTPClient::Status::STATUS_CONNECTED) {
 		hc = new HTTPClient();
-		Error ee = hc->connect_to_host(url,port,p_ssl,false);
+		Error ee = hc->connect_to_host(url, port, p_ssl, false);
 		ERR_FAIL_COND_V_MSG(ee != OK, ee, "Error parsing URL: " + path_src + ".");
-		while (hc->get_status() == HTTPClient::Status::STATUS_CONNECTING || hc->get_status() == HTTPClient::Status::STATUS_RESOLVING){
+		while (hc->get_status() == HTTPClient::Status::STATUS_CONNECTING || hc->get_status() == HTTPClient::Status::STATUS_RESOLVING) {
 			hc->poll();
 		}
 	}
 
-	header.push_back("connection: keep-alive"); 
+	header.push_back("connection: keep-alive");
 
 	PoolByteArray body;
 
-	hc->request_raw(HTTPClient::METHOD_GET,path_src,header,body);
+	hc->request_raw(HTTPClient::METHOD_GET, path_src, header, body);
 
-	while(hc->get_status() == HTTPClient::Status::STATUS_REQUESTING){
+	while (hc->get_status() == HTTPClient::Status::STATUS_REQUESTING) {
 		hc->poll();
 	}
 
-	int r_code = hc->get_response_code(); 
-	if( !(r_code > 199 && r_code <= 299) ){
-		printf("http error code %d \n",r_code);
-		unlock_mutex();
-		OS::get_singleton()->delay_usec(5000000); //5s
-		hc->close();
-		lock_mutex();
-		goto Retry;
+	int r_code = hc->get_response_code();
+	if (!(r_code > 199 && r_code <= 299)) {
+		printf("http error code %d \n", r_code);
+		return Error(FAILED);
 	}
-	
 	//这个 response 和 headers 不能调换顺序 否则response 会出现没有数据的情况
 	ERR_FAIL_COND_V_MSG(!hc->has_response(), Error(FAILED), "Error has_response: false " + path_src + ".");
 
-	while(hc->get_status() == HTTPClient::Status::STATUS_BODY){
+	while (hc->get_status() == HTTPClient::Status::STATUS_BODY) {
 		hc->poll();
 		PoolVector<uint8_t> chunk = hc->read_response_body_chunk();
 		rb.append_array(chunk);
@@ -169,7 +159,7 @@ Retry:
 	ERR_FAIL_COND_V_MSG(eeee != OK, eeee, "Error get_response_headers: " + path_src + ".");
 
 	hc->close();
-	
+
 	return OK;
 }
 
@@ -177,26 +167,37 @@ void FileAccessWwwClient::get_buffer_data() {
 	List<String> rheaders;
 
 	PoolVector<uint8_t> rb;
-	
+
 	Vector<String> header;
 
-	String hRang = "Range: bytes="+String::num_int64(pos) + "-" + String::num_int64(p_lenght + pos -1);
+	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(p_lenght + pos - 1);
 
-	header.push_back(hRang); 
+	header.push_back(hRang);
 
-	http_request(header,rb,rheaders);
+	Error e = http_request(header, rb, rheaders);
 
-	if(rb.size() > 0){
+	if(e != OK){
+		bool err_while_code  = true;
+		while (err_while_code)
+		{
+			OS::get_singleton()->delay_usec(5000000); // 5s
+			hc->close();
+			Error ee = http_request(header, rb, rheaders);
+			if(ee == OK){
+				err_while_code = false;
+			}
+		}
+	}
+
+	if (rb.size() > 0) {
 		PoolByteArray::Read r = rb.read();
-		fileAccessInfo.write(r.ptr(),rb.size());
-		pos = (pos + p_lenght)<total_size?(pos + p_lenght):total_size;
+		fileAccessInfo.write(r.ptr(), rb.size());
+		pos = (pos + p_lenght) < total_size ? (pos + p_lenght) : total_size;
 		sem.post();
-	}else{
+	} else {
 		isfileAccessInfo = false;
 	}
 }
-
-
 FileAccessWwwClient *FileAccessWwwClient::singleton = NULL;
 
 FileAccessWwwClient::FileAccessWwwClient() {
@@ -216,20 +217,19 @@ FileAccessWwwClient::~FileAccessWwwClient() {
 	}
 }
 
-
 void FileAccessWww::check_errors() const {
 
 	last_error = ERR_FILE_EOF;
 }
 
-Error FileAccessWww::_open(const String &p_path, int p_mode_flags){
+Error FileAccessWww::_open(const String &p_path, int p_mode_flags) {
 
 	FileAccessWwwClient *ss = memnew(FileAccessWwwClient);
 
 	Error ee = ss->connect(p_path);
 
 	ERR_FAIL_COND_V_MSG(ee != OK, ERR_CANT_CREATE, "FileAccessWwwClient connect faild");
-	
+
 	total_size = ss->total_size;
 
 	return OK;
@@ -271,7 +271,7 @@ void FileAccessWww::seek(size_t p_position) {
 }
 
 void FileAccessWww::seek_end(int64_t p_position) {
-	
+
 	seek(total_size + p_position);
 }
 
@@ -300,10 +300,10 @@ int FileAccessWww::get_buffer(uint8_t *p_dst, int p_length) const {
 
 	buffer_mutex.lock();
 	FileAccessWwwClient *fwc = FileAccessWwwClient::singleton;
-	if (pos != total_size){
+	if (pos != total_size) {
 		fwc->sem.wait();
 	}
-	int size = fwc->poll_back(p_dst,pos,p_length);
+	int size = fwc->poll_back(p_dst, pos, p_length);
 
 	pos = pos + size;
 	buffer_mutex.unlock();
@@ -316,15 +316,12 @@ Error FileAccessWww::get_error() const {
 }
 
 void FileAccessWww::flush() {
-
 }
 
 void FileAccessWww::store_8(uint8_t p_dest) {
-
 }
 
 void FileAccessWww::store_buffer(const uint8_t *p_src, int p_length) {
-
 }
 
 bool FileAccessWww::file_exists(const String &p_path) {
@@ -358,4 +355,3 @@ FileAccessWww::FileAccessWww() :
 FileAccessWww::~FileAccessWww() {
 	close();
 }
-
