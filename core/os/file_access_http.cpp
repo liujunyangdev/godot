@@ -265,7 +265,11 @@ void FileAccessHttp::seek(size_t p_position) {
 	fwc->pos = pos;
 	fwc->isfileAccessInfo = true;
 	fwc->ioBuffer.clear();
-	fwc->sem.clear();
+	int num = fwc->sem.get();
+	while (num > 0){
+		fwc->sem.try_wait();
+		--num;
+	}
 	fwc->unlock_mutex();
 	buffer_mutex.unlock();
 }
