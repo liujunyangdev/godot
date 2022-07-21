@@ -32,7 +32,6 @@
 
 #include "core/project_settings.h"
 #include "servers/audio_server.h"
-#include "core/os/file_access_www.h"
 
 VideoDecoderServer *VideoDecoderServer::instance = NULL;
 
@@ -117,13 +116,8 @@ void GDAPI godot_videodecoder_register_decoder(const godot_videodecoder_interfac
 
 bool VideoStreamPlaybackGDNative::open_file(const String &p_file) {
 	ERR_FAIL_COND_V(interface == NULL, false);
-	if(p_file.begins_with("http")){
-		FileAccessWww *files = memnew(FileAccessWww);
-		files->_open(p_file, FileAccess::READ);
-		file = reinterpret_cast<FileAccess *>(files);
-	} else {
-		file = FileAccess::open(p_file, FileAccess::READ);
-	}
+
+	file = FileAccess::open(p_file, FileAccess::READ);
 
 	bool file_opened = interface->open_file(data_struct, file);
 

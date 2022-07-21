@@ -28,8 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef FILE_ACCESS_WWW_H
-#define FILE_ACCESS_WWW_H
+#ifndef FILE_ACCESS_HTTP_H
+#define FILE_ACCESS_HTTP_H
 
 #include "core/os/file_access.h"
 #include "core/os/memory.h"
@@ -40,9 +40,9 @@
 
 typedef void (*CloseNotificationFunc)(const String &p_file, int p_flags);
 
-class FileAccessWww;
+class FileAccessHttp;
 
-class FileAccessWwwClient { // 内部缓存类
+class FileAccessHttpClient { // 内部缓存类
 
 	Semaphore sem;
 	mutable HTTPClient *hc = memnew(HTTPClient); // Http
@@ -53,7 +53,7 @@ class FileAccessWwwClient { // 内部缓存类
 	mutable String path_src;
 	mutable int err_num;
 	
-	RingBuffer<uint8_t> fileAccessInfo;
+	RingBuffer<uint8_t> ioBuffer;
 
 	unsigned long posStart;
 	
@@ -71,24 +71,24 @@ class FileAccessWwwClient { // 内部缓存类
 	void unlock_mutex();
 	Error http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders);
 	void get_buffer_data();
-	friend class FileAccessWww;
-	static FileAccessWwwClient *singleton;
+	friend class FileAccessHttp;
+	static FileAccessHttpClient *singleton;
 
 public:
 	mutable int total_size = 0; // 网络文件大小
 	mutable int p_lenght = 512 * 1024;
 	mutable int pos = 0; //文件 range 开始位置
 
-	static FileAccessWwwClient *get_singleton() { return singleton; }
+	static FileAccessHttpClient *get_singleton() { return singleton; }
 
 	int poll_back(uint8_t *p_buf, int pos,int p_size);
 	Error connect(const String &p_path);
 
-	FileAccessWwwClient();
-	~FileAccessWwwClient();
+	FileAccessHttpClient();
+	~FileAccessHttpClient();
 };
 
-class FileAccessWww : public FileAccess {
+class FileAccessHttp : public FileAccess {
 
 	Semaphore sem;
 	int flags;
@@ -134,8 +134,8 @@ public:
 	virtual uint32_t _get_unix_permissions(const String &p_file);
 	virtual Error _set_unix_permissions(const String &p_file, uint32_t p_permissions);
 
-	FileAccessWww();
-	virtual ~FileAccessWww();
+	FileAccessHttp();
+	virtual ~FileAccessHttp();
 };
 
 #endif

@@ -28,7 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#include "file_access_www.h"
+#include "file_access_http.h"
 
 #include "core/io/http_client.h"
 #include "core/os/os.h"
@@ -39,24 +39,24 @@
 #include "core/os/os.h"
 #include <errno.h>
 
-void FileAccessWwwClient::lock_mutex() {
+void FileAccessHttpClient::lock_mutex() {
 
 	mutex.lock();
 	lockcount++;
 }
 
-void FileAccessWwwClient::unlock_mutex() {
+void FileAccessHttpClient::unlock_mutex() {
 
 	lockcount--;
 	mutex.unlock();
 }
 
-int FileAccessWwwClient::poll_back(uint8_t *p_buf, int pos, int p_size) {
+int FileAccessHttpClient::poll_back(uint8_t *p_buf, int pos, int p_size) {
 
-	return fileAccessInfo.read(p_buf, p_size, true);
+	return ioBuffer.read(p_buf, p_size, true);
 }
 
-Error FileAccessWwwClient::connect(const String &p_path) {
+Error FileAccessHttpClient::connect(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(p_path.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	path_src = p_path;
 	pos = 0;
@@ -91,16 +91,16 @@ Error FileAccessWwwClient::connect(const String &p_path) {
 		}
 	}
 
-	fileAccessInfo.resize(24);
+	ioBuffer.resize(24);
 
 	thread.start(_thread_func, this);
 
 	return OK;
 }
 
-void FileAccessWwwClient::_thread_func() {
+void FileAccessHttpClient::_thread_func() {
 	while (!quit) {
-		if (fileAccessInfo.space_left() > p_lenght && isfileAccessInfo) {
+		if (ioBuffer.space_left() > p_lenght && isfileAccessInfo) {
 			lock_mutex();
 			get_buffer_data();
 			unlock_mutex();
@@ -109,14 +109,14 @@ void FileAccessWwwClient::_thread_func() {
 	}
 }
 
-void FileAccessWwwClient::_thread_func(void *s) {
+void FileAccessHttpClient::_thread_func(void *s) {
 
-	FileAccessWwwClient *self = (FileAccessWwwClient *)s;
+	FileAccessHttpClient *self = (FileAccessHttpClient *)s;
 
 	self->_thread_func();
 }
 
-Error FileAccessWwwClient::http_request(Vector<String> &header, PoolVector<uint8_t> &rb, List<String> &rheaders) {
+Error FileAccessHttpClient::http_request(Vector<String> &header, PoolVector<uint8_t> &rb, List<String> &rheaders) {
 
 	ERR_FAIL_COND_V_MSG(url.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	ERR_FAIL_COND_V_MSG(port == NULL, ERR_CANT_CREATE, "http_request port is empty");
@@ -163,7 +163,7 @@ Error FileAccessWwwClient::http_request(Vector<String> &header, PoolVector<uint8
 	return OK;
 }
 
-void FileAccessWwwClient::get_buffer_data() {
+void FileAccessHttpClient::get_buffer_data() {
 	List<String> rheaders;
 
 	PoolVector<uint8_t> rb;
@@ -191,16 +191,16 @@ void FileAccessWwwClient::get_buffer_data() {
 
 	if (rb.size() > 0) {
 		PoolByteArray::Read r = rb.read();
-		fileAccessInfo.write(r.ptr(), rb.size());
+		ioBuffer.write(r.ptr(), rb.size());
 		pos = (pos + p_lenght) < total_size ? (pos + p_lenght) : total_size;
 		sem.post();
 	} else {
 		isfileAccessInfo = false;
 	}
 }
-FileAccessWwwClient *FileAccessWwwClient::singleton = NULL;
+FileAccessHttpClient *FileAccessHttpClient::singleton = NULL;
 
-FileAccessWwwClient::FileAccessWwwClient() {
+FileAccessHttpClient::FileAccessHttpClient() {
 
 	quit = false;
 	singleton = this;
@@ -209,7 +209,7 @@ FileAccessWwwClient::FileAccessWwwClient() {
 	posStart = 0;
 }
 
-FileAccessWwwClient::~FileAccessWwwClient() {
+FileAccessHttpClient::~FileAccessHttpClient() {
 
 	if (thread.is_started()) {
 		quit = true;
@@ -217,89 +217,89 @@ FileAccessWwwClient::~FileAccessWwwClient() {
 	}
 }
 
-void FileAccessWww::check_errors() const {
+void FileAccessHttp::check_errors() const {
 
 	last_error = ERR_FILE_EOF;
 }
 
-Error FileAccessWww::_open(const String &p_path, int p_mode_flags) {
+Error FileAccessHttp::_open(const String &p_path, int p_mode_flags) {
 
-	FileAccessWwwClient *ss = memnew(FileAccessWwwClient);
+	FileAccessHttpClient *ss = memnew(FileAccessHttpClient);
 
 	Error ee = ss->connect(p_path);
 
-	ERR_FAIL_COND_V_MSG(ee != OK, ERR_CANT_CREATE, "FileAccessWwwClient connect faild");
+	ERR_FAIL_COND_V_MSG(ee != OK, ERR_CANT_CREATE, "FileAccessHttpClient connect faild");
 
 	total_size = ss->total_size;
 
 	return OK;
 }
 
-void FileAccessWww::close() {
+void FileAccessHttp::close() {
 }
 
-bool FileAccessWww::is_open() const {
+bool FileAccessHttp::is_open() const {
 
 	return true;
 }
 
-String FileAccessWww::get_path() const {
+String FileAccessHttp::get_path() const {
 
 	return path_src;
 }
 
-String FileAccessWww::get_path_absolute() const {
+String FileAccessHttp::get_path_absolute() const {
 
 	return path_src;
 }
 
-void FileAccessWww::seek(size_t p_position) {
+void FileAccessHttp::seek(size_t p_position) {
 
 	buffer_mutex.lock();
 	if (p_position >= total_size) {
 		p_position = total_size;
 	}
 	pos = p_position;
-	FileAccessWwwClient *fwc = FileAccessWwwClient::singleton;
+	FileAccessHttpClient *fwc = FileAccessHttpClient::singleton;
 	fwc->lock_mutex();
 	fwc->pos = pos;
 	fwc->isfileAccessInfo = true;
-	fwc->fileAccessInfo.clear();
+	fwc->ioBuffer.clear();
 	fwc->sem.clear();
 	fwc->unlock_mutex();
 	buffer_mutex.unlock();
 }
 
-void FileAccessWww::seek_end(int64_t p_position) {
+void FileAccessHttp::seek_end(int64_t p_position) {
 
 	seek(total_size + p_position);
 }
 
-size_t FileAccessWww::get_position() const {
+size_t FileAccessHttp::get_position() const {
 
 	return pos;
 }
 
-size_t FileAccessWww::get_len() const {
+size_t FileAccessHttp::get_len() const {
 
 	return total_size;
 }
 
-bool FileAccessWww::eof_reached() const {
+bool FileAccessHttp::eof_reached() const {
 
 	return last_error == ERR_FILE_EOF;
 }
-uint8_t FileAccessWww::get_8() const {
+uint8_t FileAccessHttp::get_8() const {
 
 	return 1;
 }
 
-int FileAccessWww::get_buffer(uint8_t *p_dst, int p_length) const {
+int FileAccessHttp::get_buffer(uint8_t *p_dst, int p_length) const {
 	ERR_FAIL_COND_V(!p_dst && p_length > 0, -1);
 	ERR_FAIL_COND_V(p_length < 0, -1);
 
 	buffer_mutex.lock();
-	FileAccessWwwClient *fwc = FileAccessWwwClient::singleton;
+	FileAccessHttpClient *fwc = FileAccessHttpClient::singleton;
 	if (pos != total_size) {
 		fwc->sem.wait();
 	}
@@ -310,48 +310,48 @@ int FileAccessWww::get_buffer(uint8_t *p_dst, int p_length) const {
 
 	return size;
 };
-Error FileAccessWww::get_error() const {
+Error FileAccessHttp::get_error() const {
 
 	return last_error;
 }
 
-void FileAccessWww::flush() {
+void FileAccessHttp::flush() {
 }
 
-void FileAccessWww::store_8(uint8_t p_dest) {
+void FileAccessHttp::store_8(uint8_t p_dest) {
 }
 
-void FileAccessWww::store_buffer(const uint8_t *p_src, int p_length) {
+void FileAccessHttp::store_buffer(const uint8_t *p_src, int p_length) {
 }
 
-bool FileAccessWww::file_exists(const String &p_path) {
+bool FileAccessHttp::file_exists(const String &p_path) {
 
 	return true;
 }
 
-uint64_t FileAccessWww::_get_modified_time(const String &p_file) {
+uint64_t FileAccessHttp::_get_modified_time(const String &p_file) {
 	return 1;
 }
 
-uint32_t FileAccessWww::_get_unix_permissions(const String &p_file) {
+uint32_t FileAccessHttp::_get_unix_permissions(const String &p_file) {
 	return 1;
 }
 
-Error FileAccessWww::_set_unix_permissions(const String &p_file, uint32_t p_permissions) {
+Error FileAccessHttp::_set_unix_permissions(const String &p_file, uint32_t p_permissions) {
 	return OK;
 }
 
-FileAccess *FileAccessWww::create_libc() {
+FileAccess *FileAccessHttp::create_libc() {
 
-	return memnew(FileAccessWww);
+	return memnew(FileAccessHttp);
 }
 
-CloseNotificationFunc FileAccessWww::close_notification_func = NULL;
+CloseNotificationFunc FileAccessHttp::close_notification_func = NULL;
 
-FileAccessWww::FileAccessWww() :
+FileAccessHttp::FileAccessHttp() :
 		last_error(OK) {
 }
 
-FileAccessWww::~FileAccessWww() {
+FileAccessHttp::~FileAccessHttp() {
 	close();
 }

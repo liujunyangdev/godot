@@ -45,7 +45,6 @@ bool FileAccess::backup_save = false;
 FileAccess *FileAccess::create(AccessType p_access) {
 
 	ERR_FAIL_INDEX_V(p_access, ACCESS_MAX, 0);
-
 	FileAccess *ret = create_func[p_access]();
 	ret->_set_access_type(p_access);
 	return ret;
@@ -77,6 +76,10 @@ FileAccess *FileAccess::create_for_path(const String &p_path) {
 	} else if (p_path.begins_with("user://")) {
 
 		ret = create(ACCESS_USERDATA);
+
+	} else if (p_path.begins_with("http")) {
+
+		ret = create(ACCESS_HTTP);
 
 	} else {
 
@@ -157,6 +160,11 @@ String FileAccess::fix_path(const String &p_path) const {
 				};
 				return r_path.replace("user://", "");
 			}
+
+		} break;
+		case ACCESS_HTTP: {
+
+			return r_path;
 
 		} break;
 		case ACCESS_FILESYSTEM: {
