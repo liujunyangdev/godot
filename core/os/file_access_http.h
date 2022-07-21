@@ -71,6 +71,8 @@ class FileAccessHttpClient { // 内部缓存类
 	void unlock_mutex();
 	Error http_request( Vector<String> &header,PoolVector<uint8_t> &rb,List<String> &rheaders);
 	void get_buffer_data();
+	Error url_parse(const String &p_path);
+	bool file_exists(const String &p_path);
 	friend class FileAccessHttp;
 	static FileAccessHttpClient *singleton;
 

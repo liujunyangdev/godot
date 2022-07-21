@@ -60,14 +60,8 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(p_path.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	path_src = p_path;
 	pos = 0;
-	String scheme;
-	Error err = p_path.parse_url(scheme, url, port, request_string);
-	ERR_FAIL_COND_V_MSG(err != OK, err, "Error parsing URL: " + p_path + ".");
 
-	if (p_path.begins_with("https")) {
-		port = 443;
-		p_ssl = true;
-	}
+	url_parse(p_path);
 
 	List<String> rheaders;
 
@@ -96,6 +90,37 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 	thread.start(_thread_func, this);
 
 	return OK;
+}
+
+Error FileAccessHttpClient::url_parse(const String &p_path){
+	String scheme;
+	Error err = p_path.parse_url(scheme, url, port, request_string);
+	ERR_FAIL_COND_V_MSG(err != OK, err, "Error parsing URL: " + p_path + ".");
+
+	if (p_path.begins_with("https")) {
+		port = 443;
+		p_ssl = true;
+	}
+}
+
+bool FileAccessHttpClient::file_exists(const String &p_path){
+	url_parse(p_path);
+
+	List<String> rheaders;
+
+	PoolVector<uint8_t> rb;
+
+	Vector<String> header;
+
+	String hRang = "Range: bytes=0-1";
+
+	Error e = http_request(header, rb, rheaders);
+
+	if(e != OK){
+		return false; 
+	}else{
+		return true;
+	}
 }
 
 void FileAccessHttpClient::_thread_func() {
@@ -329,16 +354,17 @@ void FileAccessHttp::store_buffer(const uint8_t *p_src, int p_length) {
 }
 
 bool FileAccessHttp::file_exists(const String &p_path) {
+	FileAccessHttpClient *fwc = FileAccessHttpClient::singleton;
 
-	return true;
+	return fwc->file_exists(p_path);
 }
 
 uint64_t FileAccessHttp::_get_modified_time(const String &p_file) {
-	return 1;
+	return 0;
 }
 
 uint32_t FileAccessHttp::_get_unix_permissions(const String &p_file) {
-	return 1;
+	return 0;
 }
 
 Error FileAccessHttp::_set_unix_permissions(const String &p_file, uint32_t p_permissions) {
@@ -353,7 +379,7 @@ FileAccess *FileAccessHttp::create_libc() {
 CloseNotificationFunc FileAccessHttp::close_notification_func = NULL;
 
 FileAccessHttp::FileAccessHttp() :
-		last_error(OK) {
+	last_error(OK) {
 }
 
 FileAccessHttp::~FileAccessHttp() {
