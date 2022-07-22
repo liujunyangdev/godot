@@ -78,9 +78,7 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 	for (const List<String>::Element *E = rheaders.front(); E; E = E->next()) {
 		String s = E->get();
 		if (s.begins_with("Content-Range")) {
-			int idnexnum = s.find("/");
-			String sizenum = s.substr(idnexnum + 1, -1);
-			total_size = sizenum.to_int64();
+			total_size = s.substr(s.find("/") + 1, -1).to_int64();
 			break;
 		}
 	}
@@ -126,7 +124,7 @@ bool FileAccessHttpClient::file_exists(const String &p_path){
 
 void FileAccessHttpClient::_thread_func() {
 	while (!quit) {
-		if (ioBuffer.space_left() > p_lenght && isfileAccessInfo) {
+		if (ioBuffer.space_left() > p_length && isfileAccessInfo) {
 			lock_mutex();
 			get_buffer_data();
 			unlock_mutex();
@@ -196,7 +194,7 @@ void FileAccessHttpClient::get_buffer_data() {
 
 	Vector<String> header;
 
-	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(p_lenght + pos - 1);
+	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(p_length + pos - 1);
 
 	header.push_back(hRang);
 
@@ -218,7 +216,7 @@ void FileAccessHttpClient::get_buffer_data() {
 	if (rb.size() > 0) {
 		PoolByteArray::Read r = rb.read();
 		ioBuffer.write(r.ptr(), rb.size());
-		pos = (pos + p_lenght) < total_size ? (pos + p_lenght) : total_size;
+		pos = (pos + p_length) < total_size ? (pos + p_length) : total_size;
 		sem.post();
 	} else {
 		isfileAccessInfo = false;
@@ -321,7 +319,8 @@ bool FileAccessHttp::eof_reached() const {
 }
 uint8_t FileAccessHttp::get_8() const {
 
-	return 1;
+	ERR_FAIL_COND_V_MSG(true, FAILED, "FileAccessHttp dummy methond  get_8");
+	return 0;
 }
 
 int FileAccessHttp::get_buffer(uint8_t *p_dst, int p_length) const {
@@ -361,14 +360,17 @@ bool FileAccessHttp::file_exists(const String &p_path) {
 }
 
 uint64_t FileAccessHttp::_get_modified_time(const String &p_file) {
+	ERR_FAIL_COND_V_MSG(true, FAILED, "FileAccessHttp dummy methond _get_modified_time");
 	return 0;
 }
 
 uint32_t FileAccessHttp::_get_unix_permissions(const String &p_file) {
+	ERR_FAIL_COND_V_MSG(true, FAILED, " FileAccessHttp dummy methond _get_unix_permissions");
 	return 0;
 }
 
 Error FileAccessHttp::_set_unix_permissions(const String &p_file, uint32_t p_permissions) {
+	ERR_FAIL_COND_V_MSG(true, FAILED, "FileAccessHttp dummy methond _set_unix_permissions");
 	return OK;
 }
 

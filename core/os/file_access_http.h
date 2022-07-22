@@ -78,7 +78,7 @@ class FileAccessHttpClient { // 内部缓存类
 
 public:
 	mutable int total_size = 0; // 网络文件大小
-	mutable int p_lenght = 512 * 1024;
+	mutable int p_length = 512 * 1024;
 	mutable int pos = 0; //文件 range 开始位置
 
 	static FileAccessHttpClient *get_singleton() { return singleton; }
