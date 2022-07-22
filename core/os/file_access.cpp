@@ -148,6 +148,11 @@ String FileAccess::fix_path(const String &p_path) const {
 			}
 
 		} break;
+		case ACCESS_HTTP: {
+			
+			return r_path;
+
+		} break;
 		case ACCESS_FILESYSTEM: {
 			return r_path;
 		} break;

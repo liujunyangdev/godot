@@ -319,11 +319,12 @@ bool FileAccessHttp::eof_reached() const {
 }
 uint8_t FileAccessHttp::get_8() const {
 
-	// ERR_FAIL_COND_V_MSG(true, FAILED, "FileAccessHttp dummy methond  get_8");
-	return 0;
+	throw std::invalid_argument( "received negative value" );
+
+	return 1;
 }
 
-int FileAccessHttp::get_buffer(uint8_t *p_dst, int p_length) const {
+uint64_t FileAccessHttp::get_buffer(uint8_t *p_dst, uint64_t p_length) const {
 	ERR_FAIL_COND_V(!p_dst && p_length > 0, -1);
 	ERR_FAIL_COND_V(p_length < 0, -1);
 
@@ -333,7 +334,6 @@ int FileAccessHttp::get_buffer(uint8_t *p_dst, int p_length) const {
 		fwc->sem.wait();
 	}
 	int size = fwc->poll_back(p_dst, pos, p_length);
-
 	pos = pos + size;
 	buffer_mutex.unlock();
 
