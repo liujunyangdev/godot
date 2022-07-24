@@ -74,6 +74,9 @@ FileAccess *FileAccess::create_for_path(const String &p_path) {
 	} else if (p_path.begins_with("user://")) {
 		ret = create(ACCESS_USERDATA);
 
+	} else if (p_path.begins_with("http://") || p_path.begins_with("https://")) {
+		ret = create(ACCESS_HTTP);
+
 	} else {
 		ret = create(ACCESS_FILESYSTEM);
 	}
