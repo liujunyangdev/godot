@@ -60,7 +60,6 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 	ERR_FAIL_COND_V_MSG(p_path.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	path_src = p_path;
 	pos = 0;
-
 	url_parse(p_path);
 
 	List<String> rheaders;
@@ -69,7 +68,7 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 
 	Vector<String> header;
 
-	String hRang = "Range: bytes=0-1";
+	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(p_length + pos - 1);
 
 	header.push_back(hRang);
 
@@ -84,6 +83,15 @@ Error FileAccessHttpClient::connect(const String &p_path) {
 	}
 
 	ioBuffer.resize(24);
+	lru.set_capacity(20);
+
+	if (rb.size() > 0) {
+		PoolByteArray::Read r = rb.read();
+		ioBuffer.write(r.ptr(), rb.size());
+		lru.insert(pos, rb);
+		pos = (pos + p_length) < total_size ? (pos + p_length) : total_size;
+		sem.post();
+	}
 
 	thread.start(_thread_func, this);
 
@@ -128,8 +136,8 @@ void FileAccessHttpClient::_thread_func() {
 			lock_mutex();
 			get_buffer_data();
 			unlock_mutex();
-			OS::get_singleton()->delay_usec(10000); //防止线程独占。每次循环延迟0.1秒
 		}
+		OS::get_singleton()->delay_usec(5); //防止线程独占。每次循环延迟0.001秒
 	}
 }
 
@@ -141,7 +149,6 @@ void FileAccessHttpClient::_thread_func(void *s) {
 }
 
 Error FileAccessHttpClient::http_request(Vector<String> &header, PoolVector<uint8_t> &rb, List<String> &rheaders) {
-
 	ERR_FAIL_COND_V_MSG(url.empty(), ERR_CANT_CREATE, "http_request url is empty");
 	ERR_FAIL_COND_V_MSG(port == NULL, ERR_CANT_CREATE, "http_request port is empty");
 	ERR_FAIL_COND_V_MSG(path_src.empty(), ERR_CANT_CREATE, "http_request path_src is empty");
@@ -152,6 +159,7 @@ Error FileAccessHttpClient::http_request(Vector<String> &header, PoolVector<uint
 		ERR_FAIL_COND_V_MSG(ee != OK, ee, "Error parsing URL: " + path_src + ".");
 		while (hc->get_status() == HTTPClient::Status::STATUS_CONNECTING || hc->get_status() == HTTPClient::Status::STATUS_RESOLVING) {
 			hc->poll();
+			OS::get_singleton()->delay_usec(1);
 		}
 	}
 
@@ -163,6 +171,7 @@ Error FileAccessHttpClient::http_request(Vector<String> &header, PoolVector<uint
 
 	while (hc->get_status() == HTTPClient::Status::STATUS_REQUESTING) {
 		hc->poll();
+		OS::get_singleton()->delay_usec(1);
 	}
 
 	int r_code = hc->get_response_code();
@@ -177,13 +186,13 @@ Error FileAccessHttpClient::http_request(Vector<String> &header, PoolVector<uint
 		hc->poll();
 		PoolVector<uint8_t> chunk = hc->read_response_body_chunk();
 		rb.append_array(chunk);
+		OS::get_singleton()->delay_usec(1);
 	}
 
 	Error eeee = hc->get_response_headers(&rheaders);
 	ERR_FAIL_COND_V_MSG(eeee != OK, eeee, "Error get_response_headers: " + path_src + ".");
 
 	hc->close();
-
 	return OK;
 }
 
@@ -194,7 +203,11 @@ void FileAccessHttpClient::get_buffer_data() {
 
 	Vector<String> header;
 
-	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(p_length + pos - 1);
+	if (pos >= total_size){
+		pos = total_size - 1;
+	}
+
+	String hRang = "Range: bytes=" + String::num_int64(pos) + "-" + String::num_int64(pos + p_length -1);
 
 	header.push_back(hRang);
 
@@ -216,12 +229,46 @@ void FileAccessHttpClient::get_buffer_data() {
 	if (rb.size() > 0) {
 		PoolByteArray::Read r = rb.read();
 		ioBuffer.write(r.ptr(), rb.size());
+		lru.insert(pos, rb);
 		pos = (pos + p_length) < total_size ? (pos + p_length) : total_size;
 		sem.post();
 	} else {
 		isfileAccessInfo = false;
 	}
 }
+void FileAccessHttpClient::set_pos(size_t position){
+
+	// size_t p_position = position;
+
+	// for (size_t i = 0; i < lru.get_size(); i++) {
+
+	// 	printf("set_pos %d \n", lru.list[i].key);
+	// 	printf("set_pos position %d \n", position);
+
+	// 	if (position >= lru.list[i].key && ((position - lru.list[i].key) <= buffer_length)) {
+
+	// 		PoolVector<uint8_t> rb = lru.list[i].data;
+	// 		PoolVector<uint8_t> sub_rb = rb.subarray(position, rb.size() - 1);
+	// 		PoolByteArray::Read r = sub_rb.read();
+	// 		ioBuffer.write(r.ptr(), sub_rb.size());
+	// 		p_position = position + sub_rb.size();
+	// 		sem.post();
+	// 		break;
+	// 	}
+	// }
+
+	bool is_pos_exites = lru.has(position);
+	if (is_pos_exites) {
+		PoolVector<uint8_t> rb = lru.get(position);
+		PoolByteArray::Read r = rb.read();
+		ioBuffer.write(r.ptr(), rb.size());
+		sem.post();
+		pos = position + p_length;
+	}else{
+		pos = position;
+	}
+}
+
 FileAccessHttpClient *FileAccessHttpClient::singleton = NULL;
 
 FileAccessHttpClient::FileAccessHttpClient() {
@@ -248,13 +295,13 @@ void FileAccessHttp::check_errors() const {
 
 Error FileAccessHttp::_open(const String &p_path, int p_mode_flags) {
 
-	FileAccessHttpClient *ss = memnew(FileAccessHttpClient);
+	FileAccessHttpClient *fhc = memnew(FileAccessHttpClient);
 
-	Error ee = ss->connect(p_path);
+	Error ee = fhc->connect(p_path);
 
 	ERR_FAIL_COND_V_MSG(ee != OK, ERR_CANT_CREATE, "FileAccessHttpClient connect faild");
 
-	total_size = ss->total_size;
+	total_size = fhc->total_size;
 
 	return OK;
 }
@@ -278,24 +325,21 @@ String FileAccessHttp::get_path_absolute() const {
 }
 
 void FileAccessHttp::seek(size_t p_position) {
-
-	buffer_mutex.lock();
 	if (p_position >= total_size) {
 		p_position = total_size;
 	}
 	pos = p_position;
-	FileAccessHttpClient *fwc = FileAccessHttpClient::singleton;
-	fwc->lock_mutex();
-	fwc->pos = pos;
-	fwc->isfileAccessInfo = true;
-	fwc->ioBuffer.clear();
-	int num = fwc->sem.get();
+	FileAccessHttpClient *fhc = FileAccessHttpClient::singleton;
+	fhc->lock_mutex();
+	fhc->isfileAccessInfo = true;
+	fhc->ioBuffer.clear();
+	int num = fhc->sem.get();
 	while (num > 0){
-		fwc->sem.try_wait();
+		fhc->sem.try_wait();
 		--num;
 	}
-	fwc->unlock_mutex();
-	buffer_mutex.unlock();
+	fhc->set_pos(p_position);
+	fhc->unlock_mutex();
 }
 
 void FileAccessHttp::seek_end(int64_t p_position) {
@@ -319,24 +363,18 @@ bool FileAccessHttp::eof_reached() const {
 }
 uint8_t FileAccessHttp::get_8() const {
 
-	throw std::invalid_argument( "received negative value" );
-
-	return 1;
 }
 
 uint64_t FileAccessHttp::get_buffer(uint8_t *p_dst, uint64_t p_length) const {
 	ERR_FAIL_COND_V(!p_dst && p_length > 0, -1);
 	ERR_FAIL_COND_V(p_length < 0, -1);
-
-	buffer_mutex.lock();
-	FileAccessHttpClient *fwc = FileAccessHttpClient::singleton;
+	FileAccessHttpClient *fhc = FileAccessHttpClient::singleton;
+	
 	if (pos != total_size) {
-		fwc->sem.wait();
+		fhc->sem.wait();
 	}
-	int size = fwc->poll_back(p_dst, pos, p_length);
+	int size = fhc->poll_back(p_dst, pos, p_length);
 	pos = pos + size;
-	buffer_mutex.unlock();
-
 	return size;
 };
 Error FileAccessHttp::get_error() const {

@@ -37,6 +37,7 @@
 #include "core/os/thread.h"
 #include "core/os/semaphore.h"
 #include "core/ring_buffer.h"
+#include "core/os/lru.h"
 
 typedef void (*CloseNotificationFunc)(const String &p_file, int p_flags);
 
@@ -54,6 +55,7 @@ class FileAccessHttpClient { // 内部缓存类
 	mutable int err_num;
 	
 	RingBuffer<uint8_t> ioBuffer;
+	mutable LRUCache<size_t, PoolVector<uint8_t>> lru;
 
 	unsigned long posStart;
 	
@@ -77,14 +79,16 @@ class FileAccessHttpClient { // 内部缓存类
 	static FileAccessHttpClient *singleton;
 
 public:
-	mutable int total_size = 0; // 网络文件大小
-	mutable int p_length = 512 * 1024;
-	mutable int pos = 0; //文件 range 开始位置
+	mutable size_t total_size = 0; // 网络文件大小
+	mutable int p_length = 1024 * 1024;
+	mutable size_t pos = 0; //文件 range 开始位置
+	mutable int sem_num = 0;
 
 	static FileAccessHttpClient *get_singleton() { return singleton; }
 
 	int poll_back(uint8_t *p_buf, int pos,int p_size);
 	Error connect(const String &p_path);
+	void set_pos(size_t p_position);
 
 	FileAccessHttpClient();
 	~FileAccessHttpClient();
@@ -98,7 +102,7 @@ class FileAccessHttp : public FileAccess {
 	mutable Error last_error;
 
 	mutable int total_size = 0;
-	mutable int pos = 0;
+	mutable size_t pos = 0;
 	Mutex buffer_mutex;
 	String path_src;
 
